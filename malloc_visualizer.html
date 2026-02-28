@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Malloc Visualizer</title>
+<style>
+body {
+  font-family: monospace;
+  background: #111;
+  color: white;
+}
+
+#heap {
+  display: flex;
+  align-items: stretch;
+  margin-top: 40px;
+  border: 2px solid #444;
+  height: 100px;
+  transition: width 0.5s ease;
+}
+
+.block {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-right: 1px solid black;
+  font-size: 12px;
+  transition: all 0.6s ease;
+}
+
+.allocated {
+  background: #3498db;
+}
+
+.free {
+  background: #e74c3c;
+}
+
+.head {
+  border-left: 4px solid gold;
+}
+
+.tail {
+  border-right: 4px solid purple;
+}
+
+.meta {
+  background: #555;
+  font-size: 10px;
+}
+
+#controls {
+  margin-top: 20px;
+}
+
+input {
+  width: 80px;
+}
+
+button {
+  margin-left: 5px;
+}
+
+#info {
+  margin-top: 20px;
+}
+</style>
+</head>
+<body>
+
+<h2>Malloc Visualizer</h2>
+
+<div id="controls">
+  Size: <input id="sizeInput" type="number" value="32">
+  <button onclick="malloc()">malloc</button>
+  <button onclick="calloc()">calloc</button>
+  Ptr: <input id="ptrInput" type="number">
+  <button onclick="freeBlock()">free</button>
+  <button onclick="reallocBlock()">realloc</button>
+</div>
+
+<div id="heap"></div>
+
+<div id="info"></div>
+
+<script>
+const METADATA_SIZE = 48;
+const ALIGNMENT = 16;
+
+function align16(x) {
+  return (x + 15) & ~15;
+}
+
+class Block {
+  constructor(start, size, free=false) {
+    this.start = start;
+    this.size = size;
+    this.free = free;
+
+    this.next_phys = null;
+    this.prev_phys = null;
+
+    this.next_free = null;
+    this.prev_free = null;
+  }
+
+  payloadStart() {
+    return this.start + METADATA_SIZE;
+  }
+
+  totalSize() {
+    return METADATA_SIZE + this.size;
+  }
+}
+
+class Heap {
+  constructor() {
+    this.head = null;
+    this.tail = null;
+    this.free_head = null;
+    this.heap_size = 0;
+  }
+
+  requestSpace(size) {
+    let total = align16(size + METADATA_SIZE);
+    let block = new Block(this.heap_size, size, false);
+    this.heap_size += total;
+
+    block.prev_phys = this.tail;
+    if (this.tail) this.tail.next_phys = block;
+    else this.head = block;
+
+    this.tail = block;
+    return block;
+  }
+
+  addToFree(block) {
+    block.free = true;
+    block.next_free = this.free_head;
+    block.prev_free = null;
+    if (this.free_head) this.free_head.prev_free = block;
+    this.free_head = block;
+  }
+
+  removeFromFree(block) {
+    if (block.prev_free) block.prev_free.next_free = block.next_free;
+    else this.free_head = block.next_free;
+
+    if (block.next_free) block.next_free.prev_free = block.prev_free;
+
+    block.next_free = block.prev_free = null;
+    block.free = false;
+  }
+
+  findFree(size) {
+    let curr = this.free_head;
+    while (curr) {
+      if (curr.size >= size) return curr;
+      curr = curr.next_free;
+    }
+    return null;
+  }
+
+  split(block, size) {
+    if (block.size < size + METADATA_SIZE + 16) return;
+
+    let newStart = block.payloadStart() + size - METADATA_SIZE;
+    let newSize = block.size - size - METADATA_SIZE;
+
+    let newBlock = new Block(newStart, newSize, true);
+
+    newBlock.next_phys = block.next_phys;
+    newBlock.prev_phys = block;
+
+    if (newBlock.next_phys)
+      newBlock.next_phys.prev_phys = newBlock;
+    else
+      this.tail = newBlock;
+
+    block.size = size;
+    block.next_phys = newBlock;
+
+    this.addToFree(newBlock);
+  }
+
+  coalesce(block) {
+    if (block.next_phys && block.next_phys.free) {
+      let next = block.next_phys;
+      this.removeFromFree(next);
+      block.size += METADATA_SIZE + next.size;
+      block.next_phys = next.next_phys;
+      if (next.next_phys)
+        next.next_phys.prev_phys = block;
+      else
+        this.tail = block;
+    }
+
+    if (block.prev_phys && block.prev_phys.free) {
+      let prev = block.prev_phys;
+      this.removeFromFree(prev);
+      prev.size += METADATA_SIZE + block.size;
+      prev.next_phys = block.next_phys;
+      if (block.next_phys)
+        block.next_phys.prev_phys = prev;
+      else
+        this.tail = prev;
+      block = prev;
+    }
+
+    this.addToFree(block);
+  }
+
+  malloc(size) {
+    if (size === 0) return null;
+    size = align16(size);
+
+    let block = this.findFree(size);
+
+    if (block) {
+      this.removeFromFree(block);
+      this.split(block, size);
+    } else {
+      block = this.requestSpace(size);
+    }
+
+    return block.payloadStart();
+  }
+
+  free(ptr) {
+    let block = this.getBlock(ptr);
+    if (!block) return;
+    this.coalesce(block);
+  }
+
+  realloc(ptr, size) {
+    if (!ptr) return this.malloc(size);
+    if (size === 0) {
+      this.free(ptr);
+      return null;
+    }
+
+    let block = this.getBlock(ptr);
+    size = align16(size);
+
+    if (size <= block.size) {
+      this.split(block, size);
+      return ptr;
+    }
+
+    if (block.next_phys && block.next_phys.free &&
+        block.size + METADATA_SIZE + block.next_phys.size >= size) {
+      let next = block.next_phys;
+      this.removeFromFree(next);
+      block.size += METADATA_SIZE + next.size;
+      block.next_phys = next.next_phys;
+      if (next.next_phys)
+        next.next_phys.prev_phys = block;
+      else
+        this.tail = block;
+
+      this.split(block, size);
+      return ptr;
+    }
+
+    let newPtr = this.malloc(size);
+    this.free(ptr);
+    return newPtr;
+  }
+
+  getBlock(ptr) {
+    let curr = this.head;
+    while (curr) {
+      if (curr.payloadStart() === ptr) return curr;
+      curr = curr.next_phys;
+    }
+    return null;
+  }
+}
+
+const heap = new Heap();
+
+function render() {
+  const container = document.getElementById("heap");
+  container.innerHTML = "";
+
+  let curr = heap.head;
+  while (curr) {
+    let blockDiv = document.createElement("div");
+    blockDiv.className = "block " + (curr.free ? "free" : "allocated");
+    if (curr === heap.head) blockDiv.classList.add("head");
+    if (curr === heap.tail) blockDiv.classList.add("tail");
+
+    blockDiv.style.width = (curr.totalSize() / 4) + "px";
+    blockDiv.innerText = curr.size;
+
+    container.appendChild(blockDiv);
+    curr = curr.next_phys;
+  }
+
+  document.getElementById("info").innerHTML =
+    "Heap size: " + heap.heap_size +
+    "<br>Free list: " + getFreeList();
+}
+
+function getFreeList() {
+  let curr = heap.free_head;
+  let arr = [];
+  while (curr) {
+    arr.push(curr.start);
+    curr = curr.next_free;
+  }
+  return arr.join(" → ");
+}
+
+function malloc() {
+  let size = parseInt(document.getElementById("sizeInput").value);
+  let ptr = heap.malloc(size);
+  render();
+  document.getElementById("ptrInput").value = ptr;
+}
+
+function calloc() {
+  let size = parseInt(document.getElementById("sizeInput").value);
+  let ptr = heap.malloc(size);
+  render();
+  document.getElementById("ptrInput").value = ptr;
+}
+
+function freeBlock() {
+  let ptr = parseInt(document.getElementById("ptrInput").value);
+  heap.free(ptr);
+  render();
+}
+
+function reallocBlock() {
+  let ptr = parseInt(document.getElementById("ptrInput").value);
+  let size = parseInt(document.getElementById("sizeInput").value);
+  let newPtr = heap.realloc(ptr, size);
+  render();
+  document.getElementById("ptrInput").value = newPtr;
+}
+
+render();
+</script>
+</body>
+</html>
