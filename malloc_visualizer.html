@@ -17,6 +17,8 @@ body {
   border: 3px solid #666;
   height: 110px;
   overflow-x: auto;
+  overflow-y: visible;
+  overflow: visible;
 }
 
 .block-container {
@@ -73,6 +75,35 @@ body {
 
 #info {
   margin-top: 20px;
+}
+
+.block-container {
+  display: flex;
+  border-right: 3px solid #000;
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.block-container:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.6);
+  z-index: 5;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 120%;
+  left: 0;
+  background: #222;
+  border: 1px solid #888;
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  display: none;
+}
+
+.block-container:hover .tooltip {
+  display: block;
 }
 </style>
 </head>
@@ -293,8 +324,9 @@ function render() {
   const container = document.getElementById("heap");
   container.innerHTML = "";
 
-  const MIN_WIDTH = 30; // minimum width in px for very small blocks
-  const META_WIDTH = 48; // metadata always 48B visually as baseline
+  const MIN_WIDTH = 16;
+  const META_WIDTH = 16;
+  const scaleFactor = META_WIDTH / METADATA_SIZE;
 
   let curr = heap.head;
 
@@ -305,23 +337,30 @@ function render() {
     if (curr === heap.head) blockContainer.classList.add("head");
     if (curr === heap.tail) blockContainer.classList.add("tail");
 
+    // --- Tooltip ---
+    const tooltip = document.createElement("div");
+    tooltip.className = "tooltip";
+    tooltip.innerHTML =
+      `Metadata Ptr: ${curr.start}<br>` +
+      `Payload Ptr: ${curr.payloadStart()}<br>` +
+      `Size: ${curr.size} bytes`;
+
+    blockContainer.appendChild(tooltip);
+
     // --- Metadata ---
     const metaDiv = document.createElement("div");
     metaDiv.className = "meta";
-
     metaDiv.style.width = META_WIDTH + "px";
-    metaDiv.innerText = `M`;
+    metaDiv.innerText = "M";
 
     // --- Payload ---
     const payloadDiv = document.createElement("div");
-    payloadDiv.className = "payload " + (curr.free ? "free" : "allocated");
+    payloadDiv.className =
+      "payload " + (curr.free ? "free" : "allocated");
 
-    // scale payload proportionally relative to metadata
-    let scaleFactor = META_WIDTH / METADATA_SIZE; // 1px per byte ratio for metadata
     let payloadWidth = Math.max(curr.size * scaleFactor, MIN_WIDTH);
-
     payloadDiv.style.width = payloadWidth + "px";
-    payloadDiv.innerText = `${curr.size}`;
+    payloadDiv.innerText = curr.size;
 
     blockContainer.appendChild(metaDiv);
     blockContainer.appendChild(payloadDiv);
