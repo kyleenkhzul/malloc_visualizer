@@ -14,19 +14,35 @@ body {
   display: flex;
   align-items: stretch;
   margin-top: 40px;
-  border: 2px solid #444;
-  height: 100px;
-  transition: width 0.5s ease;
+  border: 3px solid #666;
+  height: 110px;
+  overflow-x: auto;
 }
 
-.block {
-  position: relative;
+.block-container {
   display: flex;
-  justify-content: center;
+  border-right: 3px solid #000; /* only between blocks */
+  position: relative;
+}
+
+.meta {
+  background: #555;
+  display: flex;
   align-items: center;
-  border-right: 1px solid black;
+  justify-content: center;
+  font-size: 11px;
+  color: white;
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.payload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
-  transition: all 0.6s ease;
+  white-space: nowrap;
+  padding: 0 6px;
 }
 
 .allocated {
@@ -37,29 +53,22 @@ body {
   background: #e74c3c;
 }
 
-.head {
-  border-left: 4px solid gold;
+.head::before {
+  content: "HEAD";
+  position: absolute;
+  top: -20px;
+  left: 0;
+  color: gold;
+  font-size: 12px;
 }
 
-.tail {
-  border-right: 4px solid purple;
-}
-
-.meta {
-  background: #555;
-  font-size: 10px;
-}
-
-#controls {
-  margin-top: 20px;
-}
-
-input {
-  width: 80px;
-}
-
-button {
-  margin-left: 5px;
+.tail::after {
+  content: "TAIL";
+  position: absolute;
+  top: -20px;
+  right: 0;
+  color: violet;
+  font-size: 12px;
 }
 
 #info {
@@ -85,7 +94,7 @@ button {
 <div id="info"></div>
 
 <script>
-const METADATA_SIZE = 48;
+const METADATA_SIZE = 16;
 const ALIGNMENT = 16;
 
 function align16(x) {
@@ -284,17 +293,40 @@ function render() {
   const container = document.getElementById("heap");
   container.innerHTML = "";
 
+  const MIN_WIDTH = 30; // minimum width in px for very small blocks
+  const META_WIDTH = 48; // metadata always 48B visually as baseline
+
   let curr = heap.head;
+
   while (curr) {
-    let blockDiv = document.createElement("div");
-    blockDiv.className = "block " + (curr.free ? "free" : "allocated");
-    if (curr === heap.head) blockDiv.classList.add("head");
-    if (curr === heap.tail) blockDiv.classList.add("tail");
+    const blockContainer = document.createElement("div");
+    blockContainer.className = "block-container";
 
-    blockDiv.style.width = (curr.totalSize() / 4) + "px";
-    blockDiv.innerText = curr.size;
+    if (curr === heap.head) blockContainer.classList.add("head");
+    if (curr === heap.tail) blockContainer.classList.add("tail");
 
-    container.appendChild(blockDiv);
+    // --- Metadata ---
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "meta";
+
+    metaDiv.style.width = META_WIDTH + "px";
+    metaDiv.innerText = `M`;
+
+    // --- Payload ---
+    const payloadDiv = document.createElement("div");
+    payloadDiv.className = "payload " + (curr.free ? "free" : "allocated");
+
+    // scale payload proportionally relative to metadata
+    let scaleFactor = META_WIDTH / METADATA_SIZE; // 1px per byte ratio for metadata
+    let payloadWidth = Math.max(curr.size * scaleFactor, MIN_WIDTH);
+
+    payloadDiv.style.width = payloadWidth + "px";
+    payloadDiv.innerText = `${curr.size}`;
+
+    blockContainer.appendChild(metaDiv);
+    blockContainer.appendChild(payloadDiv);
+    container.appendChild(blockContainer);
+
     curr = curr.next_phys;
   }
 
