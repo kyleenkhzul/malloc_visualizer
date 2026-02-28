@@ -343,7 +343,7 @@ function render() {
     tooltip.innerHTML =
       `Metadata Ptr: ${curr.start}<br>` +
       `Payload Ptr: ${curr.payloadStart()}<br>` +
-      `Size: ${curr.size} bytes`;
+      `Total Size: ${curr.size+METADATA_SIZE} bytes`;
 
     blockContainer.appendChild(tooltip);
 
