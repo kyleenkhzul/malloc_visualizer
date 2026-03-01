@@ -457,7 +457,7 @@ async function malloc() {
 async function animatedMalloc(size, speed) {
   size = align16(size);
 
-  let block = heap.findFree(size);
+  let block = await animatedFindFree(size, speed);
 
   if (block) {
 
@@ -505,6 +505,23 @@ async function animatedMalloc(size, speed) {
   render(); // Immediate render, no delay
 
   return block.payloadStart();
+}
+
+async function animatedFindFree(size, speed) {
+  let curr = heap.free_head;
+  while (curr) {
+    curr.highlight = "search";  // yellow outline for "checking"
+    render();
+    await sleep(speed);
+
+    if (curr.size >= size) {
+      return curr;
+    }
+
+    curr.highlight = null;  // remove highlight after checking
+    curr = curr.next_free;
+  }
+  return null;
 }
 
 const heap = new Heap();
