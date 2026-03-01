@@ -200,7 +200,6 @@ h2 {
   top: 30px;
   left: 50%;
   transform: translateX(-50%) translateY(-20px);
-  background: #ff4d4d;
   color: white;
   padding: 14px 22px;
   border-radius: 10px;
@@ -215,6 +214,13 @@ h2 {
 #toast.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0px);
+}
+.toast-error {
+  background: #ff4d4d;
+}
+
+.toast-info {
+  background: #3498db;
 }
 </style>
 </head>
@@ -381,25 +387,42 @@ class Heap {
   }
 }
 
-function showError(message) {
+function showToast(message, type = "error") {
   const toast = document.getElementById("toast");
+
   toast.innerText = message;
+  toast.className = ""; // reset classes
   toast.classList.add("show");
+
+  if (type === "error") toast.classList.add("toast-error");
+  if (type === "info") toast.classList.add("toast-info");
 
   setTimeout(() => {
     toast.classList.remove("show");
   }, 2500);
 }
 
+function showError(message) {
+  showToast(message, "error");
+}
+
+function showInfo(message) {
+  showToast(message, "info");
+}
+
 async function malloc() {
-  let size = parseInt(document.getElementById("sizeInput").value);
+  let requestedSize = parseInt(document.getElementById("sizeInput").value);
   let speed = parseInt(document.getElementById("speedInput").value);
 
-  size = align16(size);
-
-  if (!size || size <= 0) {
+  if (!requestedSize || requestedSize <= 0) {
     showError("malloc size must be positive.");
     return;
+  }
+
+  size = align16(requestedSize);
+
+  if (size != requestedSize) {
+    showInfo(`${requestedSize} aligned to ${size}`);
   }
 
   let block = await animatedFindFree(size, speed);
@@ -701,6 +724,9 @@ async function reallocBlock() {
     return;
   }
   const alignedSize = align16(size);
+  if (alignedSize !== size) {
+    showInfo(`${size} aligned to ${alignedSize}`);
+  }
 
   // Case 1: shrinking
   if (alignedSize <= block.size) {
