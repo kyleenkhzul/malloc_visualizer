@@ -192,6 +192,28 @@ body {
   50% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+.coalesce-highlight {
+  box-shadow: 0 0 12px 4px orange;
+}
+
+.merge-boundary {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: lime;
+  animation: mergeFade 0.6s ease forwards;
+}
+
+@keyframes mergeFade {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.expanding {
+  transition: width 0.6s ease;
+}
 </style>
 </head>
 <body>
@@ -501,6 +523,22 @@ function render() {
     const blockContainer = document.createElement("div");
     blockContainer.className = "block-container";
 
+    if (curr.mergeLeft) {
+      const boundary = document.createElement("div");
+      boundary.className = "merge-boundary";
+      boundary.style.left = "0px";
+      blockContainer.appendChild(boundary);
+      curr.mergeLeft = false;
+    }
+
+    if (curr.mergeRight) {
+      const boundary = document.createElement("div");
+      boundary.className = "merge-boundary";
+      boundary.style.right = "0px";
+      blockContainer.appendChild(boundary);
+      curr.mergeRight = false;
+    }
+
     if (curr.drawSplit) {
       const splitLine = document.createElement("div");
       splitLine.className = "split-border";
@@ -614,10 +652,59 @@ function calloc() {
   document.getElementById("ptrInput").value = ptr;
 }
 
-function freeBlock() {
-  let ptr = parseInt(document.getElementById("ptrInput").value);
-  heap.free(ptr);
+// function freeBlock() {
+//   let ptr = parseInt(document.getElementById("ptrInput").value);
+//   heap.free(ptr);
+//   render();
+// }
+async function animatedFree(ptr, speed) {
+  const block = heap.getBlock(ptr);   // ✅ correct function
+  if (!block) return;
+
+  const prev = block.prev_phys;       // ✅ correct fields
+  const next = block.next_phys;
+
+  const canMergePrev = prev && prev.free;
+  const canMergeNext = next && next.free;
+
+  // Mark block free immediately (so color updates)
+  block.free = true;
+
+  // ⚡ No coalescing → instant
+  if (!canMergePrev && !canMergeNext) {
+    heap.addToFree(block);
+    render();
+    return;
+  }
+
+  // Highlight this block
+  block.highlight = "split"; // reuse cyan outline for now
   render();
+  await sleep(speed);
+
+  if (canMergePrev) prev.highlight = "split";
+  if (canMergeNext) next.highlight = "split";
+
+  render();
+  await sleep(speed);
+
+  // Show boundary fade
+  if (canMergePrev) prev.mergeRight = true;
+  if (canMergeNext) block.mergeRight = true;
+
+  render();
+  await sleep(speed);
+
+  // Perform actual logical coalesce
+  heap.coalesce(block);
+
+  render();
+}
+
+async function freeBlock() {
+  const ptr = parseInt(document.getElementById("ptrInput").value);
+  const speed = parseInt(document.getElementById("speedInput").value);
+  await animatedFree(ptr, speed);
 }
 
 function reallocBlock() {
