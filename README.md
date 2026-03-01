@@ -105,4 +105,4 @@ Hover over blocks to view metadata and payload information. Click on a block to 
 
 ## 📚 Credits
 
-Created by **Artem Khaiet, Jimmy Hackney, and Kyle Enkhzul** as an interactive teaching tool for understanding dynamic memory allocation.
+Created by **Artem Khaiet, Jimmy Hackney, and Kyle Enkhzul** as an interactive teaching tool for understanding dynamic memory allocation. 
