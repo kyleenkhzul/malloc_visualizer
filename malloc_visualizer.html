@@ -223,7 +223,6 @@ body {
 <div id="controls">
   Size: <input id="sizeInput" type="number" value="32">
   <button onclick="malloc()">malloc</button>
-  <button onclick="calloc()">calloc</button>
   Ptr: <input id="ptrInput" type="number">
   <button onclick="freeBlock()">free</button>
   <button onclick="reallocBlock()">realloc</button>
@@ -662,13 +661,6 @@ function getFreeList() {
 //   document.getElementById("ptrInput").value = ptr;
 // }
 
-function calloc() {
-  let size = parseInt(document.getElementById("sizeInput").value);
-  let ptr = heap.malloc(size);
-  render();
-  document.getElementById("ptrInput").value = ptr;
-}
-
 // function freeBlock() {
 //   let ptr = parseInt(document.getElementById("ptrInput").value);
 //   heap.free(ptr);
@@ -724,11 +716,98 @@ async function freeBlock() {
   await animatedFree(ptr, speed);
 }
 
-function reallocBlock() {
-  let ptr = parseInt(document.getElementById("ptrInput").value);
-  let size = parseInt(document.getElementById("sizeInput").value);
-  let newPtr = heap.realloc(ptr, size);
-  render();
+// function reallocBlock() {
+//   let ptr = parseInt(document.getElementById("ptrInput").value);
+//   let size = parseInt(document.getElementById("sizeInput").value);
+//   let newPtr = heap.realloc(ptr, size);
+//   render();
+//   document.getElementById("ptrInput").value = newPtr;
+// }
+
+async function reallocBlock() {
+  const ptr = parseInt(document.getElementById("ptrInput").value);
+  const size = parseInt(document.getElementById("sizeInput").value);
+  const speed = parseInt(document.getElementById("speedInput").value);
+
+  if (!ptr) {
+    // realloc with NULL ptr → just malloc
+    const newPtr = await animatedMalloc(size, speed);
+    document.getElementById("ptrInput").value = newPtr;
+    return;
+  }
+
+  if (size === 0) {
+    // realloc to 0 → free
+    await animatedFree(ptr, speed);
+    document.getElementById("ptrInput").value = "";
+    return;
+  }
+
+  const block = heap.getBlock(ptr);
+  const alignedSize = align16(size);
+
+  // Case 1: shrinking
+  if (alignedSize <= block.size) {
+    if (block.size >= alignedSize + METADATA_SIZE + 16) {
+      block.highlight = "split";
+      render();
+      await sleep(speed);
+
+      // Split visually
+      block.drawSplit = alignedSize;
+      render();
+      await sleep(speed);
+
+      heap.split(block, alignedSize);
+
+      // Animate allocation color
+      block.allocating = true;
+      render();
+      await sleep(speed);
+      block.allocating = false;
+    }
+    return;
+  }
+
+  // Case 2: try to expand into next free block
+  if (block.next_phys && block.next_phys.free &&
+      block.size + METADATA_SIZE + block.next_phys.size >= alignedSize) {
+    const next = block.next_phys;
+    next.highlight = "coalesce";
+    render();
+    await sleep(speed);
+
+    heap.removeFromFree(next);
+    block.size += METADATA_SIZE + next.size;
+    block.next_phys = next.next_phys;
+    if (next.next_phys) next.next_phys.prev_phys = block;
+    else heap.tail = block;
+
+    // Split if now too large
+    if (block.size >= alignedSize + METADATA_SIZE + 16) {
+      block.highlight = "split";
+      render();
+      await sleep(speed);
+
+      block.drawSplit = alignedSize;
+      render();
+      await sleep(speed);
+
+      heap.split(block, alignedSize);
+
+      block.allocating = true;
+      render();
+      await sleep(speed);
+      block.allocating = false;
+    }
+
+    return;
+  }
+
+  // Case 3: must allocate new block and free old one
+  const newPtr = await animatedMalloc(size, speed);
+  await animatedFree(ptr, speed);
+
   document.getElementById("ptrInput").value = newPtr;
 }
 
