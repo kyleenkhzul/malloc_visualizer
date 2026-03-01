@@ -312,14 +312,14 @@ class Heap {
     block.free = false;
   }
 
-  findFree(size) {
-    let curr = this.free_head;
-    while (curr) {
-      if (curr.size >= size) return curr;
-      curr = curr.next_free;
-    }
-    return null;
-  }
+  // findFree(size) {
+  //   let curr = this.free_head;
+  //   while (curr) {
+  //     if (curr.size >= size) return curr;
+  //     curr = curr.next_free;
+  //   }
+  //   return null;
+  // }
 
   split(block, size) {
     if (block.size < size + METADATA_SIZE + 16) return;
@@ -378,62 +378,62 @@ class Heap {
     this.addToFree(block);
   }
 
-  malloc(size) {
-    if (size === 0) return null;
-    size = align16(size);
+  // malloc(size) {
+  //   if (size === 0) return null;
+  //   size = align16(size);
 
-    let block = this.findFree(size);
+  //   let block = this.findFree(size);
 
-    if (block) {
-      this.removeFromFree(block);
-      this.split(block, size);
-    } else {
-      block = this.requestSpace(size);
-    }
+  //   if (block) {
+  //     this.removeFromFree(block);
+  //     this.split(block, size);
+  //   } else {
+  //     block = this.requestSpace(size);
+  //   }
 
-    return block.payloadStart();
-  }
+  //   return block.payloadStart();
+  // }
 
-  free(ptr) {
-    let block = this.getBlock(ptr);
-    if (!block) return;
-    this.coalesce(block);
-  }
+  // free(ptr) {
+  //   let block = this.getBlock(ptr);
+  //   if (!block) return;
+  //   this.coalesce(block);
+  // }
 
-  realloc(ptr, size) {
-    if (!ptr) return this.malloc(size);
-    if (size === 0) {
-      this.free(ptr);
-      return null;
-    }
+  // realloc(ptr, size) {
+  //   if (!ptr) return this.malloc(size);
+  //   if (size === 0) {
+  //     this.free(ptr);
+  //     return null;
+  //   }
 
-    let block = this.getBlock(ptr);
-    size = align16(size);
+  //   let block = this.getBlock(ptr);
+  //   size = align16(size);
 
-    if (size <= block.size) {
-      this.split(block, size);
-      return ptr;
-    }
+  //   if (size <= block.size) {
+  //     this.split(block, size);
+  //     return ptr;
+  //   }
 
-    if (block.next_phys && block.next_phys.free &&
-        block.size + METADATA_SIZE + block.next_phys.size >= size) {
-      let next = block.next_phys;
-      this.removeFromFree(next);
-      block.size += METADATA_SIZE + next.size;
-      block.next_phys = next.next_phys;
-      if (next.next_phys)
-        next.next_phys.prev_phys = block;
-      else
-        this.tail = block;
+  //   if (block.next_phys && block.next_phys.free &&
+  //       block.size + METADATA_SIZE + block.next_phys.size >= size) {
+  //     let next = block.next_phys;
+  //     this.removeFromFree(next);
+  //     block.size += METADATA_SIZE + next.size;
+  //     block.next_phys = next.next_phys;
+  //     if (next.next_phys)
+  //       next.next_phys.prev_phys = block;
+  //     else
+  //       this.tail = block;
 
-      this.split(block, size);
-      return ptr;
-    }
+  //     this.split(block, size);
+  //     return ptr;
+  //   }
 
-    let newPtr = this.malloc(size);
-    this.free(ptr);
-    return newPtr;
-  }
+  //   let newPtr = this.malloc(size);
+  //   this.free(ptr);
+  //   return newPtr;
+  // }
 
   getBlock(ptr) {
     let curr = this.head;
@@ -608,7 +608,7 @@ function render() {
     tooltip.innerHTML =
       `Metadata Ptr: ${curr.start}<br>` +
       `Payload Ptr: ${curr.payloadStart()}<br>` +
-      `Total Size: ${curr.size+METADATA_SIZE} bytes`;
+      `Total Size: ${curr.totalSize()} bytes`;
 
     blockContainer.appendChild(tooltip);
 
