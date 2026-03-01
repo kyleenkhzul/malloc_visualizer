@@ -194,6 +194,28 @@ h2 {
   font-size: 0.95rem;
   color: #ccc;
 }
+
+#toast {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: #ff4d4d;
+  color: white;
+  padding: 14px 22px;
+  border-radius: 10px;
+  font-weight: bold;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0px);
+}
 </style>
 </head>
 <body>
@@ -359,11 +381,26 @@ class Heap {
   }
 }
 
+function showError(message) {
+  const toast = document.getElementById("toast");
+  toast.innerText = message;
+  toast.classList.add("show");
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2500);
+}
+
 async function malloc() {
   let size = parseInt(document.getElementById("sizeInput").value);
   let speed = parseInt(document.getElementById("speedInput").value);
 
   size = align16(size);
+
+  if (!size || size <= 0) {
+    showError("malloc size must be positive.");
+    return;
+  }
 
   let block = await animatedFindFree(size, speed);
 
@@ -579,7 +616,15 @@ function getFreeList() {
 
 async function animatedFree(ptr, speed) {
   const block = heap.getBlock(ptr);   // ✅ correct function
-  if (!block) return;
+  if (!block) {
+    showError("Invalid free: pointer not allocated.");
+    return;
+  }
+
+  if (block.free) {
+    showError("Double free detected.");
+    return;
+  }
 
   const prev = block.prev_phys;       // ✅ correct fields
   const next = block.next_phys;
@@ -645,8 +690,16 @@ async function reallocBlock() {
     document.getElementById("ptrInput").value = "";
     return;
   }
+  else if (size < 0){
+    showError("realloc size cannot be negative.");
+    return;
+  }
 
   const block = heap.getBlock(ptr);
+  if (!block) {
+    showError("Invalid realloc: pointer not allocated.");
+    return;
+  }
   const alignedSize = align16(size);
 
   // Case 1: shrinking
@@ -716,5 +769,6 @@ async function reallocBlock() {
 
 render();
 </script>
+<div id="toast"></div>
 </body>
 </html>
