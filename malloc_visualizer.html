@@ -148,6 +148,50 @@ body {
   0% { background-color: orange; }
   100% { }
 }
+
+.search-highlight {
+  outline: 4px solid yellow;
+}
+
+.reuse-highlight {
+  outline: 4px solid orange;
+}
+
+.split-highlight {
+  outline: 4px solid cyan;
+}
+
+.expand-highlight {
+  outline: 4px solid purple;
+}
+
+.allocating {
+  animation: allocateFade 0.6s ease forwards;
+}
+
+@keyframes allocateFade {
+  0% {
+    background-color: #e74c3c; /* start red (free) */
+  }
+  100% {
+    background-color: #3498db; /* end blue (allocated) */
+  }
+}
+
+.split-border {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: yellow;
+  animation: splitBorderFade 0.5s ease forwards;
+}
+
+@keyframes splitBorderFade {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
 </style>
 </head>
 <body>
@@ -163,6 +207,9 @@ body {
   <button onclick="reallocBlock()">realloc</button>
 </div>
 
+<input id="speedInput" type="range" min="100" max="2000" value="600">
+<span id="speedLabel">600ms</span>
+
 <div id="heap"></div>
 
 <div id="info"></div>
@@ -170,6 +217,14 @@ body {
 <script>
 const METADATA_SIZE = 16;
 const ALIGNMENT = 16;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+document.getElementById("speedInput").oninput = function () {
+  document.getElementById("speedLabel").innerText = this.value + "ms";
+};
 
 function align16(x) {
   return (x + 15) & ~15;
@@ -369,6 +424,67 @@ class Heap {
   }
 }
 
+async function malloc() {
+    let size = parseInt(document.getElementById("sizeInput").value);
+    let speed = parseInt(document.getElementById("speedInput").value);
+
+    let ptr = await animatedMalloc(size, speed);
+    document.getElementById("ptrInput").value = ptr;
+}
+
+async function animatedMalloc(size, speed) {
+  size = align16(size);
+
+  let block = heap.findFree(size);
+
+  if (block) {
+
+    heap.removeFromFree(block);
+
+    // 🚀 Only animate if a split will happen
+    if (block.size >= size + METADATA_SIZE + 16) {
+
+      // Highlight block
+      block.highlight = "split";
+      render();
+      await sleep(speed);
+
+      // Draw split boundary
+      block.drawSplit = size;
+      render();
+      await sleep(speed);
+
+      // Perform logical split
+      heap.split(block, size);
+      render();
+      await sleep(speed);
+
+      // Animate allocation color transition
+      block.allocating = true;
+      render();
+      await sleep(speed);
+
+      block.allocating = false;
+
+    } else {
+      // No split: just mark allocated and render immediately
+      block.free = false;
+      render();
+    }
+
+    return block.payloadStart();
+  }
+
+  // Heap expansion case
+  // No need to delay unless we want expansion animation
+
+  block = heap.requestSpace(size);
+
+  render(); // Immediate render, no delay
+
+  return block.payloadStart();
+}
+
 const heap = new Heap();
 
 function render() {
@@ -384,6 +500,35 @@ function render() {
   while (curr) {
     const blockContainer = document.createElement("div");
     blockContainer.className = "block-container";
+
+    if (curr.drawSplit) {
+      const splitLine = document.createElement("div");
+      splitLine.className = "split-border";
+
+      const META_WIDTH = 16;
+      const scaleFactor = META_WIDTH / METADATA_SIZE;
+
+      const splitPosition = META_WIDTH + curr.drawSplit * scaleFactor;
+      splitLine.style.left = splitPosition + "px";
+
+      blockContainer.appendChild(splitLine);
+
+      curr.drawSplit = null;
+    }
+
+    if (curr.highlight === "search")
+      blockContainer.classList.add("search-highlight");
+
+    if (curr.highlight === "reuse")
+      blockContainer.classList.add("reuse-highlight");
+
+    if (curr.highlight === "split")
+      blockContainer.classList.add("split-highlight");
+
+    if (curr.highlight === "expand")
+      blockContainer.classList.add("expand-highlight");
+
+    curr.highlight = null;
 
     if (curr.justSplit) {
       blockContainer.classList.add("split-animate");
@@ -424,6 +569,11 @@ function render() {
     payloadDiv.className =
       "payload " + (curr.free ? "free" : "allocated");
 
+    if (curr.allocating) {
+      payloadDiv.classList.remove("allocated");
+      payloadDiv.classList.add("allocating");
+    }
+    
     let payloadWidth = Math.max(curr.size * scaleFactor, MIN_WIDTH);
     payloadDiv.style.width = payloadWidth + "px";
     payloadDiv.innerText = curr.size;
@@ -450,12 +600,12 @@ function getFreeList() {
   return arr.join(" → ");
 }
 
-function malloc() {
-  let size = parseInt(document.getElementById("sizeInput").value);
-  let ptr = heap.malloc(size);
-  render();
-  document.getElementById("ptrInput").value = ptr;
-}
+// function malloc() {
+//   let size = parseInt(document.getElementById("sizeInput").value);
+//   let ptr = heap.malloc(size);
+//   render();
+//   document.getElementById("ptrInput").value = ptr;
+// }
 
 function calloc() {
   let size = parseInt(document.getElementById("sizeInput").value);
