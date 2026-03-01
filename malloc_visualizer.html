@@ -5,26 +5,90 @@
 <title>Malloc Visualizer</title>
 <style>
 body {
-  font-family: monospace;
-  background: #111;
+  font-family: 'Courier New', monospace;
+  background: linear-gradient(135deg, #1e1e2f, #111118);
+  color: #eee;
+  margin: 0;
+  padding: 20px;
+}
+
+h2 {
+  font-size: 2rem;
+  text-align: center;
+  color: #f0f0f0;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.8);
+  margin-bottom: 20px;
+}
+
+#controls {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+#controls input[type="number"],
+#controls input[type="range"] {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.95rem;
+}
+
+#controls button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  background: #3498db;
   color: white;
+  transition: all 0.2s ease;
+}
+
+#controls button:hover {
+  background: #2980b9;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+#speedLabel {
+  margin-left: 6px;
+  font-weight: bold;
 }
 
 #heap {
   display: flex;
   align-items: stretch;
   margin-top: 40px;
-  border: 3px solid #666;
+  border: 2px solid #555;
   height: 110px;
   overflow-x: auto;
   overflow-y: visible;
   overflow: visible;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  padding: 6px;
 }
 
 .block-container {
   display: flex;
-  border-right: 3px solid #000; /* only between blocks */
+  border-right: 2px solid #000;
   position: relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  border-radius: 4px;
+}
+
+.block-container:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.6);
+  z-index: 5;
+}
+
+.meta, .payload {
+  transition: width 0.4s ease, background 0.3s ease;
 }
 
 .meta {
@@ -33,9 +97,10 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  color: white;
+  color: #fff;
   white-space: nowrap;
   padding: 0 4px;
+  border-radius: 2px 0 0 2px;
 }
 
 .payload {
@@ -45,6 +110,7 @@ body {
   font-size: 12px;
   white-space: nowrap;
   padding: 0 6px;
+  border-radius: 0 2px 2px 0;
 }
 
 .allocated {
@@ -55,128 +121,29 @@ body {
   background: #e74c3c;
 }
 
-.head::before {
-  content: "HEAD";
+/* Keep your animations intact */
+.split-animate { animation: splitFlash 0.6s ease; }
+.coalesce-animate { animation: coalesceFlash 0.6s ease; }
+.reuse-animate { animation: reuseFlash 0.6s ease; }
+.allocating { animation: allocateFade 0.6s ease forwards; }
+
+/* --- Highlights --- */
+.search-highlight { outline: 4px solid yellow; }
+.reuse-highlight { outline: 4px solid orange; }
+.split-highlight { outline: 4px solid cyan; }
+.expand-highlight { outline: 4px solid purple; }
+.coalesce-highlight { box-shadow: 0 0 12px 4px lime; }
+
+/* --- Merge/Split Boundaries --- */
+.merge-boundary {
   position: absolute;
-  top: -20px;
-  left: 0;
-  color: gold;
-  font-size: 12px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: lime;
+  animation: mergeFade 0.6s ease forwards;
 }
-
-.tail::after {
-  content: "TAIL";
-  position: absolute;
-  top: -20px;
-  right: 0;
-  color: violet;
-  font-size: 12px;
-}
-
-#info {
-  margin-top: 20px;
-}
-
-.block-container {
-  display: flex;
-  border-right: 3px solid #000;
-  position: relative;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.block-container:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.6);
-  z-index: 5;
-}
-
-.tooltip {
-  position: absolute;
-  bottom: 120%;
-  left: 0;
-  background: #222;
-  border: 1px solid #888;
-  padding: 6px 8px;
-  font-size: 11px;
-  white-space: nowrap;
-  display: none;
-}
-
-.block-container:hover .tooltip {
-  display: block;
-}
-
-.block-container {
-  display: flex;
-  border-right: 3px solid #000;
-  position: relative;
-  transition: transform 0.25s ease;
-}
-
-.meta, .payload {
-  transition: width 0.4s ease, background 0.3s ease;
-}
-
-/* Split highlight */
-.split-animate {
-  animation: splitFlash 0.6s ease;
-}
-
-@keyframes splitFlash {
-  0% { box-shadow: 0 0 0px yellow; }
-  50% { box-shadow: 0 0 20px yellow; }
-  100% { box-shadow: 0 0 0px yellow; }
-}
-
-/* Coalesce highlight */
-.coalesce-animate {
-  animation: coalesceFlash 0.6s ease;
-}
-
-@keyframes coalesceFlash {
-  0% { box-shadow: 0 0 0px lime; }
-  50% { box-shadow: 0 0 20px lime; }
-  100% { box-shadow: 0 0 0px lime; }
-}
-
-/* Reuse highlight */
-.reuse-animate {
-  animation: reuseFlash 0.6s ease;
-}
-
-@keyframes reuseFlash {
-  0% { background-color: orange; }
-  100% { }
-}
-
-.search-highlight {
-  outline: 4px solid yellow;
-}
-
-.reuse-highlight {
-  outline: 4px solid orange;
-}
-
-.split-highlight {
-  outline: 4px solid cyan;
-}
-
-.expand-highlight {
-  outline: 4px solid purple;
-}
-
-.allocating {
-  animation: allocateFade 0.6s ease forwards;
-}
-
-@keyframes allocateFade {
-  0% {
-    background-color: #e74c3c; /* start red (free) */
-  }
-  100% {
-    background-color: #3498db; /* end blue (allocated) */
-  }
-}
+@keyframes mergeFade { 0% { opacity: 1; } 100% { opacity: 0; } }
 
 .split-border {
   position: absolute;
@@ -186,33 +153,45 @@ body {
   background: yellow;
   animation: splitBorderFade 0.5s ease forwards;
 }
+@keyframes splitBorderFade { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
 
-@keyframes splitBorderFade {
-  0% { opacity: 0; }
-  50% { opacity: 1; }
-  100% { opacity: 0; }
-}
+/* --- Animations --- */
+.split-animate { animation: splitFlash 0.6s ease; }
+@keyframes splitFlash { 0% { box-shadow: 0 0 0px cyan; } 50% { box-shadow: 0 0 20px cyan; } 100% { box-shadow: 0 0 0px cyan; } }
 
-.coalesce-highlight {
-  box-shadow: 0 0 12px 4px orange;
-}
+.coalesce-animate { animation: coalesceFlash 0.6s ease; }
+@keyframes coalesceFlash { 0% { box-shadow: 0 0 0px lime; } 50% { box-shadow: 0 0 20px lime; } 100% { box-shadow: 0 0 0px lime; } }
 
-.merge-boundary {
+.reuse-animate { animation: reuseFlash 0.6s ease; }
+@keyframes reuseFlash { 0% { background-color: orange; } 100% { } }
+
+.allocating { animation: allocateFade 0.6s ease forwards; }
+@keyframes allocateFade { 0% { background-color: #e74c3c; } 100% { background-color: #3498db; } }
+
+.tooltip {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: lime;
-  animation: mergeFade 0.6s ease forwards;
+  bottom: 120%;
+  left: 0;
+  background: rgba(30,30,30,0.95);
+  border: 1px solid #888;
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  display: none;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 
-@keyframes mergeFade {
-  0% { opacity: 1; }
-  100% { opacity: 0; }
-}
+.block-container:hover .tooltip { display: block; }
 
-.expanding {
-  transition: width 0.6s ease;
+.head::before { content: "HEAD"; position: absolute; top: -22px; left: 0; color: gold; font-size: 12px; }
+.tail::after { content: "TAIL"; position: absolute; top: -22px; right: 0; color: violet; font-size: 12px; }
+
+#info {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.95rem;
+  color: #ccc;
 }
 </style>
 </head>
@@ -312,15 +291,6 @@ class Heap {
     block.free = false;
   }
 
-  // findFree(size) {
-  //   let curr = this.free_head;
-  //   while (curr) {
-  //     if (curr.size >= size) return curr;
-  //     curr = curr.next_free;
-  //   }
-  //   return null;
-  // }
-
   split(block, size) {
     if (block.size < size + METADATA_SIZE + 16) return;
 
@@ -378,63 +348,6 @@ class Heap {
     this.addToFree(block);
   }
 
-  // malloc(size) {
-  //   if (size === 0) return null;
-  //   size = align16(size);
-
-  //   let block = this.findFree(size);
-
-  //   if (block) {
-  //     this.removeFromFree(block);
-  //     this.split(block, size);
-  //   } else {
-  //     block = this.requestSpace(size);
-  //   }
-
-  //   return block.payloadStart();
-  // }
-
-  // free(ptr) {
-  //   let block = this.getBlock(ptr);
-  //   if (!block) return;
-  //   this.coalesce(block);
-  // }
-
-  // realloc(ptr, size) {
-  //   if (!ptr) return this.malloc(size);
-  //   if (size === 0) {
-  //     this.free(ptr);
-  //     return null;
-  //   }
-
-  //   let block = this.getBlock(ptr);
-  //   size = align16(size);
-
-  //   if (size <= block.size) {
-  //     this.split(block, size);
-  //     return ptr;
-  //   }
-
-  //   if (block.next_phys && block.next_phys.free &&
-  //       block.size + METADATA_SIZE + block.next_phys.size >= size) {
-  //     let next = block.next_phys;
-  //     this.removeFromFree(next);
-  //     block.size += METADATA_SIZE + next.size;
-  //     block.next_phys = next.next_phys;
-  //     if (next.next_phys)
-  //       next.next_phys.prev_phys = block;
-  //     else
-  //       this.tail = block;
-
-  //     this.split(block, size);
-  //     return ptr;
-  //   }
-
-  //   let newPtr = this.malloc(size);
-  //   this.free(ptr);
-  //   return newPtr;
-  // }
-
   getBlock(ptr) {
     let curr = this.head;
     while (curr) {
@@ -446,14 +359,9 @@ class Heap {
 }
 
 async function malloc() {
-    let size = parseInt(document.getElementById("sizeInput").value);
-    let speed = parseInt(document.getElementById("speedInput").value);
+  let size = parseInt(document.getElementById("sizeInput").value);
+  let speed = parseInt(document.getElementById("speedInput").value);
 
-    let ptr = await animatedMalloc(size, speed);
-    document.getElementById("ptrInput").value = ptr;
-}
-
-async function animatedMalloc(size, speed) {
   size = align16(size);
 
   let block = await animatedFindFree(size, speed);
@@ -488,22 +396,22 @@ async function animatedMalloc(size, speed) {
       block.allocating = false;
 
     } else {
-      // No split: just mark allocated and render immediately
+      // No split: immediate allocation (no lag)
       block.free = false;
       render();
     }
 
-    return block.payloadStart();
+    const ptr = block.payloadStart();
+    document.getElementById("ptrInput").value = ptr;
+    return;
   }
 
-  // Heap expansion case
-  // No need to delay unless we want expansion animation
-
+  // Heap expansion case (no artificial delay)
   block = heap.requestSpace(size);
+  render();
 
-  render(); // Immediate render, no delay
-
-  return block.payloadStart();
+  const ptr = block.payloadStart();
+  document.getElementById("ptrInput").value = ptr;
 }
 
 async function animatedFindFree(size, speed) {
@@ -654,18 +562,6 @@ function getFreeList() {
   return arr.join(" → ");
 }
 
-// function malloc() {
-//   let size = parseInt(document.getElementById("sizeInput").value);
-//   let ptr = heap.malloc(size);
-//   render();
-//   document.getElementById("ptrInput").value = ptr;
-// }
-
-// function freeBlock() {
-//   let ptr = parseInt(document.getElementById("ptrInput").value);
-//   heap.free(ptr);
-//   render();
-// }
 async function animatedFree(ptr, speed) {
   const block = heap.getBlock(ptr);   // ✅ correct function
   if (!block) return;
@@ -716,14 +612,6 @@ async function freeBlock() {
   await animatedFree(ptr, speed);
 }
 
-// function reallocBlock() {
-//   let ptr = parseInt(document.getElementById("ptrInput").value);
-//   let size = parseInt(document.getElementById("sizeInput").value);
-//   let newPtr = heap.realloc(ptr, size);
-//   render();
-//   document.getElementById("ptrInput").value = newPtr;
-// }
-
 async function reallocBlock() {
   const ptr = parseInt(document.getElementById("ptrInput").value);
   const size = parseInt(document.getElementById("sizeInput").value);
@@ -731,7 +619,7 @@ async function reallocBlock() {
 
   if (!ptr) {
     // realloc with NULL ptr → just malloc
-    const newPtr = await animatedMalloc(size, speed);
+    const newPtr = await malloc();
     document.getElementById("ptrInput").value = newPtr;
     return;
   }
@@ -805,7 +693,7 @@ async function reallocBlock() {
   }
 
   // Case 3: must allocate new block and free old one
-  const newPtr = await animatedMalloc(size, speed);
+  const newPtr = await malloc();
   await animatedFree(ptr, speed);
 
   document.getElementById("ptrInput").value = newPtr;
