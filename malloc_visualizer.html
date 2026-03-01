@@ -122,12 +122,6 @@ h2 {
   background: #e74c3c;
 }
 
-/* Keep your animations intact */
-.split-animate { animation: splitFlash 0.6s ease; }
-.coalesce-animate { animation: coalesceFlash 0.6s ease; }
-.reuse-animate { animation: reuseFlash 0.6s ease; }
-.allocating { animation: allocateFade 0.6s ease forwards; }
-
 /* --- Highlights --- */
 .search-highlight { outline: 4px solid yellow; }
 .reuse-highlight { outline: 4px solid orange; }
@@ -222,11 +216,63 @@ h2 {
 .toast-info {
   background: #3498db;
 }
+
+.description {
+  max-width: 900px;
+  margin: 20px auto 30px auto;
+  padding: 20px 25px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 14px;
+  color: #ddd;
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.description h3 {
+  margin-top: 15px;
+  margin-bottom: 8px;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.description ul {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.description li {
+  margin-bottom: 4px;
+}
 </style>
 </head>
 <body>
 
 <h2>Malloc Visualizer</h2>
+<div class="description">
+  <p>
+    This interactive heap visualizer demonstrates how a dynamic memory allocator works.
+    You can allocate, free, and reallocate memory while watching how blocks split,
+    coalesce, and are traversed using a first-fit strategy.
+  </p>
+
+  <p>
+    <strong>Interaction:</strong> Hover over any block to view
+    its address and size. Clicking a block automatically copies its
+    <strong>payload pointer</strong> into the pointer field.
+    All <code>free</code> and <code>realloc</code> operations must use the
+    payload pointer — metadata addresses are internal and not visible to the user.
+  </p>
+
+  <h3>Key Assumptions</h3>
+  <ul>
+    <li>All allocations are aligned to 16 bytes</li>
+    <li>Metadata size is 16 bytes per block</li>
+    <li>Malloc uses a first-fit strategy</li>
+    <li>Blocks form a doubly linked list with boundary tags</li>
+    <li>An explicit free list is maintained, with most recently freed block being the head</li>
+    <li>Splitting and coalescing are supported</li>
+  </ul>
+</div>
 
 <div id="controls">
   Size: <input id="sizeInput" type="number" value="32">
@@ -236,24 +282,65 @@ h2 {
   <button onclick="reallocBlock()">realloc</button>
 </div>
 
-<input id="speedInput" type="range" min="100" max="2000" value="600">
-<span id="speedLabel">600ms</span>
+<div class="control-group">
+  <label for="speedInput" class="slider-label">
+    Animation Speed (ms per step)
+  </label>
+  <input 
+    type="range" 
+    id="speedInput" 
+    min="50" 
+    max="1000" 
+    step="50" 
+    value="600"
+  />
+  <span id="speedValue">600 ms</span>
+</div>
+
 
 <div id="heap"></div>
 
 <div id="info"></div>
 
 <script>
-const METADATA_SIZE = 16;
-const ALIGNMENT = 16;
+const speedSlider = document.getElementById("speedInput");
+const speedValue = document.getElementById("speedValue");
+
+speedValue.innerText = speedSlider.value + " ms";
+
+speedSlider.addEventListener("input", () => {
+  speedValue.innerText = speedSlider.value + " ms";
+});
+
+function showToast(message, type = "error") {
+  const toast = document.getElementById("toast");
+
+  toast.innerText = message;
+  toast.className = ""; // reset classes
+  toast.classList.add("show");
+
+  if (type === "error") toast.classList.add("toast-error");
+  if (type === "info") toast.classList.add("toast-info");
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2500);
+}
+
+function showError(message) {
+  showToast(message, "error");
+}
+
+function showInfo(message) {
+  showToast(message, "info");
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-document.getElementById("speedInput").oninput = function () {
-  document.getElementById("speedLabel").innerText = this.value + "ms";
-};
+const METADATA_SIZE = 16;
+const ALIGNMENT = 16;
 
 function align16(x) {
   return (x + 15) & ~15;
@@ -387,111 +474,6 @@ class Heap {
   }
 }
 
-function showToast(message, type = "error") {
-  const toast = document.getElementById("toast");
-
-  toast.innerText = message;
-  toast.className = ""; // reset classes
-  toast.classList.add("show");
-
-  if (type === "error") toast.classList.add("toast-error");
-  if (type === "info") toast.classList.add("toast-info");
-
-  setTimeout(() => {
-    toast.classList.remove("show");
-  }, 2500);
-}
-
-function showError(message) {
-  showToast(message, "error");
-}
-
-function showInfo(message) {
-  showToast(message, "info");
-}
-
-async function malloc() {
-  let requestedSize = parseInt(document.getElementById("sizeInput").value);
-  let speed = parseInt(document.getElementById("speedInput").value);
-
-  if (!requestedSize || requestedSize <= 0) {
-    showError("malloc size must be positive.");
-    return;
-  }
-
-  size = align16(requestedSize);
-
-  if (size != requestedSize) {
-    showInfo(`${requestedSize} aligned to ${size}`);
-  }
-
-  let block = await animatedFindFree(size, speed);
-
-  if (block) {
-
-    heap.removeFromFree(block);
-
-    // 🚀 Only animate if a split will happen
-    if (block.size >= size + METADATA_SIZE + 16) {
-
-      // Highlight block
-      block.highlight = "split";
-      render();
-      await sleep(speed);
-
-      // Draw split boundary
-      block.drawSplit = size;
-      render();
-      await sleep(speed);
-
-      // Perform logical split
-      heap.split(block, size);
-      render();
-      await sleep(speed);
-
-      // Animate allocation color transition
-      block.allocating = true;
-      render();
-      await sleep(speed);
-
-      block.allocating = false;
-
-    } else {
-      // No split: immediate allocation (no lag)
-      block.free = false;
-      render();
-    }
-
-    const ptr = block.payloadStart();
-    document.getElementById("ptrInput").value = ptr;
-    return;
-  }
-
-  // Heap expansion case (no artificial delay)
-  block = heap.requestSpace(size);
-  render();
-
-  const ptr = block.payloadStart();
-  document.getElementById("ptrInput").value = ptr;
-}
-
-async function animatedFindFree(size, speed) {
-  let curr = heap.free_head;
-  while (curr) {
-    curr.highlight = "search";  // yellow outline for "checking"
-    render();
-    await sleep(speed);
-
-    if (curr.size >= size) {
-      return curr;
-    }
-
-    curr.highlight = null;  // remove highlight after checking
-    curr = curr.next_free;
-  }
-  return null;
-}
-
 const heap = new Heap();
 
 function render() {
@@ -515,11 +497,6 @@ function render() {
       const ptr = block.payloadStart();
       document.getElementById("ptrInput").value = ptr;
 
-      // Optional: brief visual feedback
-      blockContainer.classList.add("reuse-animate");
-      setTimeout(() => {
-        blockContainer.classList.remove("reuse-animate");
-      }, 400);
     });
 
     if (curr.mergeLeft) {
@@ -627,6 +604,88 @@ function render() {
     "<br>Free list: " + getFreeList();
 }
 
+async function animatedFindFree(size, speed) {
+  let curr = heap.free_head;
+  while (curr) {
+    curr.highlight = "search";  // yellow outline for "checking"
+    render();
+    await sleep(speed);
+
+    if (curr.size >= size) {
+      return curr;
+    }
+
+    curr.highlight = null;  // remove highlight after checking
+    curr = curr.next_free;
+  }
+  return null;
+}
+
+async function malloc() {
+  let requestedSize = parseInt(document.getElementById("sizeInput").value);
+  let speed = parseInt(document.getElementById("speedInput").value);
+
+  if (!requestedSize || requestedSize <= 0) {
+    showError("malloc size must be positive.");
+    return;
+  }
+
+  size = align16(requestedSize);
+
+  if (size != requestedSize) {
+    showInfo(`${requestedSize} aligned to ${size}`);
+  }
+
+  let block = await animatedFindFree(size, speed);
+
+  if (block) {
+
+    heap.removeFromFree(block);
+
+    // Only animate if a split will happen
+    if (block.size >= size + METADATA_SIZE + 16) {
+
+      // Highlight block
+      block.highlight = "split";
+      render();
+      await sleep(speed);
+
+      // Draw split boundary
+      block.drawSplit = size;
+      render();
+      await sleep(speed);
+
+      // Perform logical split
+      heap.split(block, size);
+      render();
+      await sleep(speed);
+
+      // Animate allocation color transition
+      block.allocating = true;
+      render();
+      await sleep(speed);
+
+      block.allocating = false;
+
+    } else {
+      // No split: immediate allocation (no lag)
+      block.free = false;
+      render();
+    }
+
+    const ptr = block.payloadStart();
+    document.getElementById("ptrInput").value = ptr;
+    return;
+  }
+
+  // Heap expansion case (no artificial delay)
+  block = heap.requestSpace(size);
+  render();
+
+  const ptr = block.payloadStart();
+  document.getElementById("ptrInput").value = ptr;
+}
+
 function getFreeList() {
   let curr = heap.free_head;
   let arr = [];
@@ -638,7 +697,7 @@ function getFreeList() {
 }
 
 async function animatedFree(ptr, speed) {
-  const block = heap.getBlock(ptr);   // ✅ correct function
+  const block = heap.getBlock(ptr);
   if (!block) {
     showError("Invalid free: pointer not allocated.");
     return;
@@ -649,7 +708,7 @@ async function animatedFree(ptr, speed) {
     return;
   }
 
-  const prev = block.prev_phys;       // ✅ correct fields
+  const prev = block.prev_phys;
   const next = block.next_phys;
 
   const canMergePrev = prev && prev.free;
@@ -658,7 +717,7 @@ async function animatedFree(ptr, speed) {
   // Mark block free immediately (so color updates)
   block.free = true;
 
-  // ⚡ No coalescing → instant
+  // If no coalescing, instant free
   if (!canMergePrev && !canMergeNext) {
     heap.addToFree(block);
     render();
@@ -701,14 +760,14 @@ async function reallocBlock() {
   const speed = parseInt(document.getElementById("speedInput").value);
 
   if (!ptr) {
-    // realloc with NULL ptr → just malloc
+    // realloc with NULL ptr is just malloc
     const newPtr = await malloc();
     document.getElementById("ptrInput").value = newPtr;
     return;
   }
 
   if (size === 0) {
-    // realloc to 0 → free
+    // realloc to 0 is free
     await animatedFree(ptr, speed);
     document.getElementById("ptrInput").value = "";
     return;
