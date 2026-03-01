@@ -79,6 +79,7 @@ h2 {
   position: relative;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   border-radius: 4px;
+  cursor: pointer;
 }
 
 .block-container:hover {
@@ -446,6 +447,20 @@ function render() {
   while (curr) {
     const blockContainer = document.createElement("div");
     blockContainer.className = "block-container";
+    const block = curr; 
+
+    blockContainer.addEventListener("click", (e) => {
+      e.stopPropagation(); // prevent bubbling issues
+
+      const ptr = block.payloadStart();
+      document.getElementById("ptrInput").value = ptr;
+
+      // Optional: brief visual feedback
+      blockContainer.classList.add("reuse-animate");
+      setTimeout(() => {
+        blockContainer.classList.remove("reuse-animate");
+      }, 400);
+    });
 
     if (curr.mergeLeft) {
       const boundary = document.createElement("div");
